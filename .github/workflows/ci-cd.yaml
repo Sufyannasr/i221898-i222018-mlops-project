@@ -50,7 +50,7 @@ jobs:
       # Docker login (SECURE)
       # -----------------------
       - name: Login to Docker Hub
-        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+        run: echo "${{ secrets.Thebossishere1234 }}" | docker login -u "${{ secrets.sufy4444 }}" --password-stdin
 
       # -----------------------
       # Tag + Push image
