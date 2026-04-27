@@ -9,30 +9,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # -----------------------
-      # Checkout code
-      # -----------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # -----------------------
-      # Setup Python
-      # -----------------------
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # -----------------------
-      # Install dependencies
-      # -----------------------
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r model/requirements.txt
 
       # -----------------------
-      # Train model (CI check)
+      # Force MLflow to avoid broken local tracking in CI
+      # -----------------------
+      - name: Set MLflow environment
+        run: |
+          echo "MLFLOW_TRACKING_URI=sqlite:///mlflow.db" >> $GITHUB_ENV
+
+      # -----------------------
+      # Train model
       # -----------------------
       - name: Train model
         run: |
@@ -40,8 +38,17 @@ jobs:
           python train.py
 
       # -----------------------
-      # Check model file exists
+      # Validate artifact
       # -----------------------
       - name: Validate model artifact
         run: |
           test -f model/model.pkl
+
+      # -----------------------
+      # Optional: upload artifact to GitHub
+      # -----------------------
+      - name: Upload model artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: model
+          path: model/model.pkl
