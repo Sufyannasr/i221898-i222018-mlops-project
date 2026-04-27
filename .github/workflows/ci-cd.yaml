@@ -2,32 +2,34 @@ name: MLOps CI-CD Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
-  build-test-train:
+  build-train-deploy:
     runs-on: ubuntu-latest
 
     steps:
+      # -----------------------
+      # Checkout repo
+      # -----------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # -----------------------
+      # Setup Python
+      # -----------------------
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+      # -----------------------
+      # Install dependencies
+      # -----------------------
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r model/requirements.txt
-
-      # -----------------------
-      # Force MLflow to avoid broken local tracking in CI
-      # -----------------------
-      - name: Set MLflow environment
-        run: |
-          echo "MLFLOW_TRACKING_URI=sqlite:///mlflow.db" >> $GITHUB_ENV
 
       # -----------------------
       # Train model
@@ -38,17 +40,22 @@ jobs:
           python train.py
 
       # -----------------------
-      # Validate artifact
+      # Build Docker image
       # -----------------------
-      - name: Validate model artifact
+      - name: Build Docker image
         run: |
-          test -f model/model.pkl
+          docker build -t breast-cancer-api -f docker/Dockerfile .
 
       # -----------------------
-      # Optional: upload artifact to GitHub
+      # Docker login (SECURE)
       # -----------------------
-      - name: Upload model artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: model
-          path: model/model.pkl
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      # -----------------------
+      # Tag + Push image
+      # -----------------------
+      - name: Push Docker image
+        run: |
+          docker tag breast-cancer-api ${{ secrets.DOCKER_USERNAME }}/breast-cancer-api:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/breast-cancer-api:latest
