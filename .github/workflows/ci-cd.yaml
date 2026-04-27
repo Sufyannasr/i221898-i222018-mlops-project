@@ -47,7 +47,7 @@ jobs:
           docker build -t breast-cancer-api -f docker/Dockerfile .
 
       # -----------------------
-      # Docker login (SECURE)
+      # Docker login
       # -----------------------
       - name: Login to Docker Hub
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
@@ -59,3 +59,51 @@ jobs:
         run: |
           docker tag breast-cancer-api ${{ secrets.DOCKER_USERNAME }}/breast-cancer-api:latest
           docker push ${{ secrets.DOCKER_USERNAME }}/breast-cancer-api:latest
+
+      # -----------------------
+      # Setup kubectl
+      # -----------------------
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      # -----------------------
+      # Configure kubeconfig
+      # -----------------------
+      - name: Configure kubeconfig
+        run: |
+          echo "${{ secrets.KUBE_CONFIG }}" > kubeconfig
+          export KUBECONFIG=$PWD/kubeconfig
+
+      # -----------------------
+      # Deploy to Kubernetes
+      # -----------------------
+      - name: Deploy to Kubernetes
+        run: |
+          export KUBECONFIG=$PWD/kubeconfig
+          kubectl set image deployment/breast-cancer-api breast-cancer-api=${{ secrets.DOCKER_USERNAME }}/breast-cancer-api:latest
+          kubectl rollout status deployment/breast-cancer-api --timeout=120s
+
+      # -----------------------
+      # Smoke test
+      # -----------------------
+      - name: Smoke test deployment
+        run: |
+          export KUBECONFIG=$PWD/kubeconfig
+          kubectl port-forward service/breast-cancer-service 5000:5000 >/tmp/pf.log 2>&1 &
+          PF_PID=$!
+          sleep 10
+
+          curl -f http://localhost:5000/ || (kill $PF_PID && exit 1)
+          curl -f http://localhost:5000/metrics || (kill $PF_PID && exit 1)
+
+          kill $PF_PID
+
+      # -----------------------
+      # Rollback on failure
+      # -----------------------
+      - name: Rollback if deployment fails
+        if: failure()
+        run: |
+          export KUBECONFIG=$PWD/kubeconfig
+          kubectl rollout undo deployment/breast-cancer-api
+          kubectl rollout status deployment/breast-cancer-api --timeout=120s
